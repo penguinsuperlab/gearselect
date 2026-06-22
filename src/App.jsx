@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import GearList from './pages/GearList'
 import PackingList from './pages/PackingList'
-import { List, CheckSquare } from 'lucide-react'
+import DataPage from './pages/DataPage'
+import { List, CheckSquare, Database } from 'lucide-react'
 
 const TABS = [
   { id: 'gear', label: 'ギア一覧', icon: List },
   { id: 'packing', label: 'パッキング', icon: CheckSquare },
+  { id: 'data', label: 'データ', icon: Database },
 ]
 
 export default function App() {
@@ -16,6 +18,7 @@ export default function App() {
       <main className="flex-1 pb-20 overflow-y-auto">
         {activeTab === 'gear' && <GearList />}
         {activeTab === 'packing' && <PackingList />}
+        {activeTab === 'data' && <DataPage />}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
