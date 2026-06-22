@@ -11,6 +11,7 @@ function generateId() {
 export default function GearList() {
   const [gears, setGears] = useLocalStorage('gears', [])
   const [selectedCategories, setSelectedCategories] = useState([])
+  const [sortKey, setSortKey] = useState('category')
   const [showModal, setShowModal] = useState(false)
   const [editingGear, setEditingGear] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -26,11 +27,13 @@ export default function GearList() {
       ? gears
       : gears.filter(g => selectedCategories.includes(g.categoryId))
     return [...list].sort((a, b) => {
+      if (sortKey === 'name') return a.name.localeCompare(b.name, 'ja')
+      if (sortKey === 'weight') return (b.weight ?? -1) - (a.weight ?? -1)
       const ai = CATEGORIES.findIndex(c => c.id === a.categoryId)
       const bi = CATEGORIES.findIndex(c => c.id === b.categoryId)
       return ai - bi || a.name.localeCompare(b.name, 'ja')
     })
-  }, [gears, selectedCategories])
+  }, [gears, selectedCategories, sortKey])
 
   const openAdd = () => {
     setEditingGear(null)
@@ -68,6 +71,23 @@ export default function GearList() {
             <Plus size={16} />
             追加
           </button>
+        </div>
+
+        <div className="flex gap-1.5 mb-2">
+          {[
+            { key: 'category', label: 'カテゴリ順' },
+            { key: 'name', label: '名前順' },
+            { key: 'weight', label: '重さ順' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setSortKey(key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors
+                ${sortKey === key ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="flex flex-wrap gap-2">
