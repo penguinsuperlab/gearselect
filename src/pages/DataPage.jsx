@@ -1,41 +1,85 @@
 import { useRef, useState } from 'react'
 import { Download, Upload, CheckCircle, AlertCircle } from 'lucide-react'
+import { CATEGORIES, CATEGORY_MAP } from '../constants'
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
 
 export default function DataPage() {
-  const fileInputRef = useRef(null)
+  const jsonLoadRef = useRef(null)
+  const csvLoadRef = useRef(null)
   const [message, setMessage] = useState(null)
 
-  const handleSave = () => {
+  const showMessage = (type, text) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 3000)
+  }
+
+  const handleJsonSave = () => {
     const data = {
       gears: JSON.parse(localStorage.getItem('gears') || '[]'),
       packingLists: JSON.parse(localStorage.getItem('packingLists') || '[]'),
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'gearselect-backup.json'
-    a.click()
-    URL.revokeObjectURL(url)
-    setMessage({ type: 'success', text: '保存しました' })
+    download('gearselect-backup.json', JSON.stringify(data, null, 2), 'application/json')
+    showMessage('success', '保存しました')
   }
 
-  const handleLoad = (e) => {
+  const handleJsonLoad = (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
+    readFile(file, (text) => {
       try {
-        const data = JSON.parse(ev.target.result)
+        const data = JSON.parse(text)
         if (!Array.isArray(data.gears)) throw new Error()
         localStorage.setItem('gears', JSON.stringify(data.gears))
         localStorage.setItem('packingLists', JSON.stringify(data.packingLists ?? []))
         window.location.reload()
       } catch {
-        setMessage({ type: 'error', text: 'ファイルが正しくありません' })
+        showMessage('error', 'ファイルが正しくありません')
       }
-    }
-    reader.readAsText(file)
+    })
+    e.target.value = ''
+  }
+
+  const handleCsvSave = () => {
+    const gears = JSON.parse(localStorage.getItem('gears') || '[]')
+    const header = '名前,カテゴリ,重さ(g),メモ'
+    const rows = gears.map(g => [
+      csvEscape(g.name),
+      csvEscape(CATEGORY_MAP[g.categoryId]?.label ?? ''),
+      g.weight ?? '',
+      csvEscape(g.memo ?? ''),
+    ].join(','))
+    download('gearselect-gears.csv', '﻿' + [header, ...rows].join('\n'), 'text/csv')
+    showMessage('success', '書き出しました')
+  }
+
+  const handleCsvLoad = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    readFile(file, (text) => {
+      try {
+        const lines = text.replace(/^﻿/, '').split('\n').filter(Boolean)
+        const [, ...dataLines] = lines
+        const newGears = dataLines.map(line => {
+          const [name, categoryLabel, weight, memo] = parseCsvLine(line)
+          const cat = CATEGORIES.find(c => c.label === categoryLabel)
+          return {
+            id: generateId(),
+            name: name.trim(),
+            categoryId: cat?.id ?? 'other',
+            weight: weight !== '' ? Number(weight) : null,
+            memo: memo?.trim() ?? '',
+          }
+        }).filter(g => g.name)
+        const existing = JSON.parse(localStorage.getItem('gears') || '[]')
+        localStorage.setItem('gears', JSON.stringify([...existing, ...newGears]))
+        window.location.reload()
+      } catch {
+        showMessage('error', 'ファイルが正しくありません')
+      }
+    })
     e.target.value = ''
   }
 
@@ -46,36 +90,17 @@ export default function DataPage() {
       </header>
 
       <div className="flex-1 p-4 space-y-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-          <p className="text-sm font-semibold text-gray-700">バックアップ</p>
-          <p className="text-xs text-gray-400">ギアとパッキングリストをJSONファイルに書き出します</p>
-          <button
-            onClick={handleSave}
-            className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-green-700 active:bg-green-800 transition-colors"
-          >
-            <Download size={16} />
-            Save（書き出し）
-          </button>
-        </div>
+        <Section title="JSONバックアップ" desc="ギアとパッキングリストをまるごと保存・復元">
+          <Button icon={<Download size={16} />} label="Save（JSON書き出し）" onClick={handleJsonSave} />
+          <Button icon={<Upload size={16} />} label="Load（JSON読み込み）" onClick={() => jsonLoadRef.current.click()} outline />
+          <input ref={jsonLoadRef} type="file" accept=".json" className="hidden" onChange={handleJsonLoad} />
+        </Section>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-          <p className="text-sm font-semibold text-gray-700">復元</p>
-          <p className="text-xs text-gray-400">JSONファイルからデータを読み込みます。現在のデータは上書きされます</p>
-          <button
-            onClick={() => fileInputRef.current.click()}
-            className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-700 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
-          >
-            <Upload size={16} />
-            Load（読み込み）
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={handleLoad}
-          />
-        </div>
+        <Section title="CSVエクスポート" desc="ギア一覧をExcelで開けるCSVで書き出し・追加インポート">
+          <Button icon={<Download size={16} />} label="Export（CSV書き出し）" onClick={handleCsvSave} />
+          <Button icon={<Upload size={16} />} label="Import（CSV読み込み）" onClick={() => csvLoadRef.current.click()} outline />
+          <input ref={csvLoadRef} type="file" accept=".csv" className="hidden" onChange={handleCsvLoad} />
+        </Section>
 
         {message && (
           <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium
@@ -87,4 +112,71 @@ export default function DataPage() {
       </div>
     </div>
   )
+}
+
+function Section({ title, desc, children }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+      <p className="text-sm font-semibold text-gray-700">{title}</p>
+      <p className="text-xs text-gray-400">{desc}</p>
+      {children}
+    </div>
+  )
+}
+
+function Button({ icon, label, onClick, outline }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors
+        ${outline
+          ? 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+          : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'}`}
+    >
+      {icon}{label}
+    </button>
+  )
+}
+
+function download(filename, content, type) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function readFile(file, cb) {
+  const reader = new FileReader()
+  reader.onload = (e) => cb(e.target.result)
+  reader.readAsText(file, 'utf-8')
+}
+
+function csvEscape(str) {
+  if (!str) return ''
+  return str.includes(',') || str.includes('"') || str.includes('\n')
+    ? `"${str.replace(/"/g, '""')}"`
+    : str
+}
+
+function parseCsvLine(line) {
+  const result = []
+  let cur = ''
+  let inQuote = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuote) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+      else if (ch === '"') inQuote = false
+      else cur += ch
+    } else {
+      if (ch === '"') inQuote = true
+      else if (ch === ',') { result.push(cur); cur = '' }
+      else cur += ch
+    }
+  }
+  result.push(cur)
+  return result
 }
