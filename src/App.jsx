@@ -2,12 +2,14 @@ import { useState } from 'react'
 import GearList from './pages/GearList'
 import PackingList from './pages/PackingList'
 import DataPage from './pages/DataPage'
-import { List, CheckSquare, Database } from 'lucide-react'
+import HelpPage from './pages/HelpPage'
+import { List, CheckSquare, Database, HelpCircle } from 'lucide-react'
 
 const TABS = [
   { id: 'gear', label: 'ギア一覧', icon: List },
   { id: 'packing', label: 'パッキング', icon: CheckSquare },
   { id: 'data', label: 'データ', icon: Database },
+  { id: 'help', label: 'ヘルプ', icon: HelpCircle },
 ]
 
 export default function App() {
@@ -19,6 +21,7 @@ export default function App() {
         {activeTab === 'gear' && <GearList />}
         {activeTab === 'packing' && <PackingList />}
         {activeTab === 'data' && <DataPage />}
+        {activeTab === 'help' && <HelpPage />}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
