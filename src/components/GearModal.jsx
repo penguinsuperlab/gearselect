@@ -1,10 +1,57 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { CATEGORIES } from '../constants'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+
+function MakerInput({ value, onChange }) {
+  const [makers] = useLocalStorage('makers', [])
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  const suggestions = value
+    ? makers.filter(m => m.toLowerCase().includes(value.toLowerCase()) && m !== value)
+    : makers
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="例: エバニュー"
+        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {suggestions.map(m => (
+            <li
+              key={m}
+              onMouseDown={() => { onChange(m); setOpen(false) }}
+              className="px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 cursor-pointer"
+            >
+              {m}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 export default function GearModal({ gear, onSave, onClose }) {
+  const [makers, setMakers] = useLocalStorage('makers', [])
   const [name, setName] = useState('')
   const [categoryId, setCategoryId] = useState(CATEGORIES[0].id)
+  const [maker, setMaker] = useState('')
   const [memo, setMemo] = useState('')
   const [weight, setWeight] = useState('')
 
@@ -12,6 +59,7 @@ export default function GearModal({ gear, onSave, onClose }) {
     if (gear) {
       setName(gear.name)
       setCategoryId(gear.categoryId)
+      setMaker(gear.maker || '')
       setMemo(gear.memo || '')
       setWeight(gear.weight != null ? String(gear.weight) : '')
     }
@@ -20,7 +68,11 @@ export default function GearModal({ gear, onSave, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!name.trim()) return
-    onSave({ name: name.trim(), categoryId, memo: memo.trim(), weight: weight !== '' ? Number(weight) : null })
+    const makerTrimmed = maker.trim()
+    if (makerTrimmed && !makers.includes(makerTrimmed)) {
+      setMakers(prev => [...prev, makerTrimmed].sort((a, b) => a.localeCompare(b, 'ja')))
+    }
+    onSave({ name: name.trim(), categoryId, maker: makerTrimmed, memo: memo.trim(), weight: weight !== '' ? Number(weight) : null })
   }
 
   return (
@@ -42,10 +94,15 @@ export default function GearModal({ gear, onSave, onClose }) {
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="例: スノーピーク チタンマグ"
+              placeholder="例: 400FD"
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               autoFocus
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">メーカー</label>
+            <MakerInput value={maker} onChange={setMaker} />
           </div>
 
           <div>

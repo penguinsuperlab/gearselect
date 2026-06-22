@@ -45,11 +45,11 @@ export default function GearList() {
     setShowModal(true)
   }
 
-  const handleSave = ({ name, categoryId, memo, weight }) => {
+  const handleSave = ({ name, categoryId, maker, memo, weight }) => {
     if (editingGear) {
-      setGears(prev => prev.map(g => g.id === editingGear.id ? { ...g, name, categoryId, memo, weight } : g))
+      setGears(prev => prev.map(g => g.id === editingGear.id ? { ...g, name, categoryId, maker, memo, weight } : g))
     } else {
-      setGears(prev => [...prev, { id: generateId(), name, categoryId, memo, weight }])
+      setGears(prev => [...prev, { id: generateId(), name, categoryId, maker, memo, weight }])
     }
     setShowModal(false)
   }
@@ -136,7 +136,9 @@ export default function GearList() {
                 <div key={gear.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 flex items-start gap-3">
                   <span className="text-2xl mt-0.5 leading-none">{cat?.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm leading-snug">{gear.name}</p>
+                    <p className="font-medium text-gray-900 text-sm leading-snug">
+                      {gear.maker ? <span className="text-gray-400 font-normal">{gear.maker} </span> : null}{gear.name}
+                    </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-xs text-gray-400">{cat?.label}</p>
                       {gear.weight != null && (

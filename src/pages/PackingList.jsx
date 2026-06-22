@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronUp, Save, Check } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Save, Check, Pencil } from 'lucide-react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { CATEGORIES, CATEGORY_MAP } from '../constants'
 
@@ -54,9 +54,104 @@ function SaveListModal({ checkedIds, gears, onSave, onClose }) {
   )
 }
 
-function SavedListCard({ list, gears, onDelete }) {
+function EditListModal({ list, gears, onSave, onClose }) {
+  const [name, setName] = useState(list.name)
+  const [selectedIds, setSelectedIds] = useState(new Set(list.gearIds))
+
+  const toggle = (id) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const groupedGears = useMemo(() => {
+    const groups = {}
+    for (const cat of CATEGORIES) {
+      const items = gears.filter(g => g.categoryId === cat.id)
+      if (items.length > 0) groups[cat.id] = { cat, items }
+    }
+    return groups
+  }, [gears])
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    onSave({ name: name.trim(), gearIds: [...selectedIds] })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[90svh]">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
+          <h2 className="font-semibold text-gray-800 text-lg">リストを編集</h2>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-4 space-y-4 overflow-y-auto flex-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">リスト名</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">ギア</label>
+              <div className="space-y-3">
+                {Object.values(groupedGears).map(({ cat, items }) => (
+                  <div key={cat.id}>
+                    <p className="text-xs font-semibold text-gray-400 mb-1">{cat.emoji} {cat.label}</p>
+                    <div className="space-y-1.5">
+                      {items.map(gear => (
+                        <label
+                          key={gear.id}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border cursor-pointer transition-colors
+                            ${selectedIds.has(gear.id) ? 'border-green-400 bg-green-50' : 'border-gray-100 bg-white'}`}
+                        >
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-none transition-colors
+                            ${selectedIds.has(gear.id) ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                            {selectedIds.has(gear.id) && <Check size={11} color="white" strokeWidth={3} />}
+                          </div>
+                          <input type="checkbox" className="sr-only" checked={selectedIds.has(gear.id)} onChange={() => toggle(gear.id)} />
+                          <span className="text-sm text-gray-800">
+                            {gear.maker && <span className="text-gray-400">{gear.maker} </span>}{gear.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="p-4 border-t border-gray-100 flex gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim()}
+              className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-green-700 transition-colors"
+            >
+              保存する
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function SavedListCard({ list, gears, onDelete, onEdit }) {
   const [expanded, setExpanded] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   const listGears = list.gearIds
     .map(id => gears.find(g => g.id === id))
@@ -76,6 +171,12 @@ function SavedListCard({ list, gears, onDelete }) {
           </p>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowEdit(true)}
+            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            <Pencil size={15} />
+          </button>
           <button
             onClick={() => setDeleteConfirm(true)}
             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -107,6 +208,15 @@ function SavedListCard({ list, gears, onDelete }) {
             })
           )}
         </div>
+      )}
+
+      {showEdit && (
+        <EditListModal
+          list={list}
+          gears={gears}
+          onSave={(updated) => { onEdit(list.id, updated); setShowEdit(false) }}
+          onClose={() => setShowEdit(false)}
+        />
       )}
 
       {deleteConfirm && (
@@ -182,6 +292,10 @@ export default function PackingList() {
     setSavedLists(prev => prev.filter(l => l.id !== id))
   }
 
+  const handleEditList = (id, { name, gearIds }) => {
+    setSavedLists(prev => prev.map(l => l.id === id ? { ...l, name, gearIds } : l))
+  }
+
   return (
     <div className="flex flex-col min-h-full">
       <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
@@ -238,8 +352,17 @@ export default function PackingList() {
                             onChange={() => toggleGear(gear.id)}
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 text-sm">{gear.name}</p>
-                            {gear.memo && <p className="text-xs text-gray-400 mt-0.5 truncate">{gear.memo}</p>}
+                            <p className="font-medium text-gray-900 text-sm">
+                              {gear.maker && <span className="text-gray-400 font-normal">{gear.maker} </span>}{gear.name}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {gear.weight != null && (
+                                <span className="text-xs text-gray-400">
+                                  {gear.weight >= 1000 ? `${(gear.weight / 1000).toFixed(1)}kg` : `${gear.weight}g`}
+                                </span>
+                              )}
+                              {gear.memo && <span className="text-xs text-gray-400 truncate">{gear.memo}</span>}
+                            </div>
                           </div>
                         </label>
                       ))}
@@ -290,6 +413,7 @@ export default function PackingList() {
                   list={list}
                   gears={gears}
                   onDelete={handleDeleteList}
+                  onEdit={handleEditList}
                 />
               ))}
             </div>
