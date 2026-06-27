@@ -1,7 +1,84 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { CATEGORIES } from '../constants'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { supabase } from '../lib/supabase'
+
+function GearNameInput({ value, onChange, onSelectSuggestion }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef(null)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const search = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setSuggestions([])
+      setOpen(false)
+      return
+    }
+    setLoading(true)
+    const { data } = await supabase
+      .from('gear_master')
+      .select('*')
+      .ilike('name', `%${query}%`)
+      .limit(8)
+    setSuggestions(data || [])
+    setLoading(false)
+    setOpen(true)
+  }, [])
+
+  const handleChange = (e) => {
+    const val = e.target.value
+    onChange(val)
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => search(val), 300)
+  }
+
+  const handleSelect = (item) => {
+    onSelectSuggestion(item)
+    setOpen(false)
+    setSuggestions([])
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={handleChange}
+        placeholder="例: 400FD"
+        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        autoFocus
+      />
+      {open && (loading || suggestions.length > 0) && (
+        <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {loading ? (
+            <li className="px-3 py-2.5 text-sm text-gray-400">検索中...</li>
+          ) : suggestions.map(item => (
+            <li
+              key={item.id}
+              onMouseDown={() => handleSelect(item)}
+              className="px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 cursor-pointer"
+            >
+              <span className="font-medium">{item.name}</span>
+              {item.brand && <span className="text-gray-400 ml-2">{item.brand}</span>}
+              {item.weight_g != null && <span className="text-gray-400 ml-2">{item.weight_g}g</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function MakerInput({ value, onChange }) {
   const [makers] = useLocalStorage('makers', [])
@@ -54,6 +131,8 @@ export default function GearModal({ gear, onSave, onClose }) {
   const [maker, setMaker] = useState('')
   const [memo, setMemo] = useState('')
   const [weight, setWeight] = useState('')
+  const [contribute, setContribute] = useState(true)
+  const [fromSuggestion, setFromSuggestion] = useState(false)
 
   useEffect(() => {
     if (gear) {
@@ -65,15 +144,37 @@ export default function GearModal({ gear, onSave, onClose }) {
     }
   }, [gear])
 
-  const handleSubmit = (e) => {
+  const handleSelectSuggestion = (item) => {
+    setName(item.name)
+    if (item.brand) setMaker(item.brand)
+    if (item.weight_g != null) setWeight(String(item.weight_g))
+    if (item.category_id) setCategoryId(item.category_id)
+    setFromSuggestion(true)
+    setContribute(false)
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return
+
     const makerTrimmed = maker.trim()
     if (makerTrimmed && !makers.includes(makerTrimmed)) {
       setMakers(prev => [...prev, makerTrimmed].sort((a, b) => a.localeCompare(b, 'ja')))
     }
+
     onSave({ name: name.trim(), categoryId, maker: makerTrimmed, memo: memo.trim(), weight: weight !== '' ? Number(weight) : null })
+
+    if (!gear && contribute && !fromSuggestion) {
+      await supabase.from('gear_master').insert({
+        name: name.trim(),
+        brand: makerTrimmed || null,
+        weight_g: weight !== '' ? Number(weight) : null,
+        category_id: categoryId,
+      })
+    }
   }
+
+  const isEditing = !!gear
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -90,14 +191,22 @@ export default function GearModal({ gear, onSave, onClose }) {
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ギア名 *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="例: 400FD"
-              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              autoFocus
-            />
+            {isEditing ? (
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="例: 400FD"
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                autoFocus
+              />
+            ) : (
+              <GearNameInput
+                value={name}
+                onChange={(val) => { setName(val); setFromSuggestion(false); setContribute(true) }}
+                onSelectSuggestion={handleSelectSuggestion}
+              />
+            )}
           </div>
 
           <div>
@@ -148,6 +257,18 @@ export default function GearModal({ gear, onSave, onClose }) {
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
             />
           </div>
+
+          {!isEditing && (
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={contribute}
+                onChange={e => setContribute(e.target.checked)}
+                className="rounded text-green-600"
+              />
+              このギアをコミュニティDBに追加する
+            </label>
+          )}
 
           <button
             type="submit"
