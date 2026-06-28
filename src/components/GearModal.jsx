@@ -177,7 +177,7 @@ export default function GearModal({ gear, onSave, onClose }) {
   const isEditing = !!gear
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center pb-16 sm:p-4">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
       <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col sm:max-h-[90vh]">
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-semibold text-gray-800 text-lg">
